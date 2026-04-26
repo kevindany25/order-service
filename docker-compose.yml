@@ -1,0 +1,50 @@
+services:
+  order-db:
+    image: postgres:15-alpine
+    container_name: order-postgres
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: order_pass
+      POSTGRES_DB: order_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - order-postgres-data:/var/lib/postgresql/data
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  order_service:
+    build: .
+    container_name: order_service
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: postgresql://order_user:order_pass@order-db:5432/oreder_db
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PRODUCT_SERVICE_URL: http://product-service:3002
+      JWT_SECRET: ${JWT_SECRET}
+    
+    ports:
+      - '3003:3003'
+    depends_on:
+      order-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    volumes:
+      - ./src:/app/src
+      - ./dist:/app/dist
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+  
+networks:
+  ecommerce-network:
+    external: true
+    name: ecommerce-network
+  
+volumes:
+  order-postgres-data:
